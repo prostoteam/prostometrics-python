@@ -19,6 +19,60 @@ UNIQUE = "unique"
 TOP = "top"
 
 
+def event_wire_size(event: Event) -> int:
+    """Roughly what this event costs as a line in the batch body.
+
+    The type letter, the series id, the payload, the timestamp and the
+    separators between them. It is an estimate, used only to close a batch
+    before it grows past what the ingest endpoint accepts, so it rounds up
+    rather than down.
+    """
+    # t|<series>|<payload>|<seconds>\n, with room for a six-digit series id and
+    # an eleven-digit timestamp.
+    framing = 1 + 1 + 6 + 1 + 1 + 11 + 1
+    if event.type == UNIQUE:
+        # Unique ids are decimal digits, so characters and bytes agree.
+        return framing + len(event.unique_id or "")
+    if event.type == TOP:
+        # The item is whatever a visitor touched, and an article name in a
+        # non-Latin script is two or three bytes a character. Counting
+        # characters would let a batch close at a third of the size the
+        # endpoint measures. isascii is a cached flag, so the common case costs
+        # nothing and only a non-Latin item is encoded to be measured.
+        item = event.item or ""
+        item_bytes = len(item) if item.isascii() else len(item.encode("utf-8"))
+        return framing + len(event.unique_id or "") + 1 + item_bytes
+    # The widest a number is written as. This client encodes with repr(), which
+    # picks the shorter of the fixed and exponent forms, so even the extremes
+    # are short -- unlike the Go client, whose encoder never uses an exponent
+    # and writes 1e-300 as three hundred characters.
+    return framing + 26
+
+
+def definition_wire_size(metric: str, labels: Sequence[str]) -> int:
+    """What a series costs the first time a batch mentions it.
+
+    The ``S|`` line naming the metric and every label value. A batch defines
+    every series the server's dictionary has not seen, which on a first flush is
+    all of them, and those lines can outweigh the events that need them -- a
+    metric name plus eight labels is kilobytes where an event line is tens of
+    bytes. Counting only events is how a batch reaches several times what the
+    endpoint accepts while believing it is in range, and this client has no
+    splitter to catch it.
+    """
+    # S|<series>|<metric>\n, with room for a six-digit series id.
+    size = 1 + 1 + 6 + 1 + _utf8_size(metric) + 1
+    for label in labels:
+        if label:
+            size += 1 + _utf8_size(label)
+    return size
+
+
+def _utf8_size(value: str) -> int:
+    # isascii is a cached flag, so the common case costs nothing.
+    return len(value) if value.isascii() else len(value.encode("utf-8"))
+
+
 class Event:
     """One recorded metric event, as queued by the caller's thread."""
 

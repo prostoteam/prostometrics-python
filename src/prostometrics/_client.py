@@ -16,7 +16,7 @@ import math
 import random
 import secrets
 import threading
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from . import _fork
 from ._api_key import looks_like_client_key, refusal_hint
@@ -30,6 +30,8 @@ from ._constants import (
     DEFAULT_CLIENT_BACKOFF_MAX_DELAY_MS,
     DEFAULT_FLUSH_INTERVAL_MS,
     DEFAULT_FLUSH_TIMEOUT_MS,
+    DEFAULT_MAX_BATCH_BYTES,
+    DEFAULT_MAX_BATCH_SERIES,
     DEFAULT_MAX_BATCH_SIZE,
     DEFAULT_MAX_TOTAL_SERIES,
     DEFAULT_OUTAGE_BUFFER_MAX_AGE_MS,
@@ -65,6 +67,8 @@ from ._payload import (
     VALUE_SPARSE,
     Event,
     Payload,
+    definition_wire_size,
+    event_wire_size,
 )
 from ._ring_buffer import RingBuffer
 from ._series import series_key
@@ -534,13 +538,39 @@ class Client:
             self._logger.exception("prostometrics: flush cycle failed")
 
     def _take_events(self) -> List[Event]:
-        events: List[Event] = []
+        # The lock is the one every caller takes to record a metric, so it is
+        # held for the shift alone: measuring bytes and building series keys for
+        # thousands of events under it would stall application threads for
+        # milliseconds at every flush, in a client whose contract is that a
+        # metric call does not block.
         with self._lock:
-            while len(events) < DEFAULT_MAX_BATCH_SIZE:
-                event = self._queue.shift()
-                if event is None:
-                    break
-                events.append(event)
+            taken = [
+                event for event in (self._queue.shift() for _ in range(DEFAULT_MAX_BATCH_SIZE)) if event is not None
+            ]
+
+        # A batch is full on whichever of three ceilings it reaches first,
+        # because the endpoint refuses a batch whole on any of them. Events
+        # alone bound neither the bytes -- a few thousand long top-list items
+        # are megabytes -- nor the series definitions, which a first flush
+        # carries one of per series it touches, and which travel in the same
+        # body.
+        events: List[Event] = []
+        batch_bytes = 0
+        batch_series: Set[str] = set()
+        for index, event in enumerate(taken):
+            if batch_bytes >= DEFAULT_MAX_BATCH_BYTES or len(batch_series) >= DEFAULT_MAX_BATCH_SERIES:
+                # Whatever did not fit goes back at the front of the queue, in
+                # order, for the next flush -- dropping it here would lose
+                # events the caller successfully recorded.
+                with self._lock:
+                    self._queue.unshift_all(taken[index:])
+                break
+            events.append(event)
+            batch_bytes += event_wire_size(event)
+            key = series_key(event.metric, event.labels)
+            if key not in batch_series:
+                batch_series.add(key)
+                batch_bytes += definition_wire_size(event.metric, event.labels)
         return events
 
     def _flush_one_batch(self, ignore_client_backoff: bool = False) -> bool:

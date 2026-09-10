@@ -8,6 +8,7 @@ those are exactly the places a client can be subtly wrong.
 from __future__ import annotations
 
 import contextlib
+import gzip
 import http.server
 import threading
 from collections import deque
@@ -19,12 +20,22 @@ from prostometrics import _clock
 
 
 class RecordedRequest:
-    __slots__ = ("body", "headers", "path")
+    __slots__ = ("body", "headers", "path", "sent_bytes")
 
     def __init__(self, path: str, headers: Dict[str, str], body: bytes) -> None:
         self.path = path
         self.headers = headers
+        self.sent_bytes = len(body)
+        # The real endpoint unwraps a compressed body before it parses a line of
+        # it, so this one does too: every assertion below is about the batch,
+        # not about how it travelled.
+        if headers.get("content-encoding", "").strip().lower() == "gzip":
+            body = gzip.decompress(body)
         self.body = body
+
+    @property
+    def was_compressed(self) -> bool:
+        return self.headers.get("content-encoding", "").strip().lower() == "gzip"
 
     @property
     def text(self) -> str:
@@ -134,10 +145,13 @@ class FakeIngester:
 
     def _handle(self, path: str, headers: Dict[str, str], body: bytes) -> ScriptedResponse:
         with self._lock:
-            self.requests.append(RecordedRequest(path, headers, body))
+            recorded = RecordedRequest(path, headers, body)
+            self.requests.append(recorded)
             if self.scripted:
                 return self.scripted.popleft()
-        decoded = body.decode("utf-8").split("\n")
+        # The recorded body is the batch itself, unwrapped if it arrived
+        # compressed; counting the bytes on the wire would count gzip framing.
+        decoded = recorded.body.decode("utf-8").split("\n")
         accepted = len([line for line in decoded if line and not line.startswith(("H|", "S|"))])
         return (
             202,

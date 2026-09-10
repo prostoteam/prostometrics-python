@@ -8,6 +8,7 @@ burst. Matching the Go and Node clients, the newest item is refused instead.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Sequence
 from typing import Deque, Generic, Optional, TypeVar
 
 T = TypeVar("T")
@@ -35,6 +36,17 @@ class RingBuffer(Generic[T]):
         if not self._items:
             return None
         return self._items.popleft()
+
+    def unshift_all(self, items: Sequence[T]) -> None:
+        """Put items back at the front, in their original order.
+
+        A flush takes more from the queue than one batch may carry, because how
+        much a batch can carry is only known once the events are measured. What
+        does not fit belongs at the head of the queue for the next flush, ahead
+        of anything recorded since: dropping it would lose events the caller
+        successfully recorded, and appending it would reorder them.
+        """
+        self._items.extendleft(reversed(items))
 
     def clear(self) -> None:
         self._items.clear()

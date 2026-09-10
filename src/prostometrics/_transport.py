@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import email.utils
+import gzip
 import http.client
 import json
 import logging
@@ -26,6 +27,7 @@ from ._clock import monotonic_ms, wall_seconds
 from ._constants import (
     ACCEPTED_HEADER_NAME,
     BATCH_ID_HEADER_NAME,
+    COMPRESS_MIN_BYTES,
     DEFAULT_STOP_RESPONSE_CODES,
     DEFAULT_STOP_STATUS_CODES,
     DICTIONARY_RESYNC_WARNING_THRESHOLD,
@@ -48,6 +50,34 @@ from ._payload import Payload
 from ._workload import validate_workload
 
 _UNKNOWN_DICTIONARY_CODE = "unknown_series_dictionary"
+
+
+def _compress_body(body: bytes) -> bytes:
+    """Return the bytes to send, compressed when that is worth doing.
+
+    A batch body is the same handful of shapes repeated line after line -- the
+    series ids, the second, the metric names, the paths -- and gives up about
+    three quarters of its size to gzip. The lowest level is deliberate: it keeps
+    most of that saving for a fraction of the processor time, and this runs in
+    the caller's application rather than ours.
+
+    gzip is the choice because it is the only one every client can reach without
+    carrying a compressor: browsers offer it and nothing else for outgoing data,
+    and the standard library has it in Python, Go and Node alike.
+
+    A body too small to be worth it, or one that failed to compress, is returned
+    as it came: the encoding is an optimisation and never a reason to lose a
+    batch.
+    """
+    if len(body) < COMPRESS_MIN_BYTES:
+        return body
+    try:
+        compressed = gzip.compress(body, compresslevel=1)
+    except Exception:  # pragma: no cover - defensive
+        return body
+    # Already-compressed content can grow. Nothing a batch carries does, but
+    # sending more bytes than we were given never makes sense.
+    return compressed if len(compressed) < len(body) else body
 
 
 class HTTPTransport:
@@ -198,11 +228,15 @@ class HTTPTransport:
                 connection.close()
 
     def _send_body(self, body: bytes, batch_id: str, workload: str, timeout: float) -> None:
+        raw_length = len(body)
+        encoded = _compress_body(body)
         headers = {
             "Content-Type": "text/plain; charset=utf-8",
-            "Content-Length": str(len(body)),
+            "Content-Length": str(len(encoded)),
             "Connection": "keep-alive",
         }
+        if encoded is not body:
+            headers["Content-Encoding"] = "gzip"
         headers.update(self.headers)
         if self.api_key:
             headers["Authorization"] = self.api_key
@@ -212,7 +246,7 @@ class HTTPTransport:
 
         try:
             connection = self._connect(timeout)
-            connection.request("POST", self._path, body=body, headers=headers)
+            connection.request("POST", self._path, body=encoded, headers=headers)
             response = connection.getresponse()
             status = response.status
             reason = response.reason or ""
@@ -225,7 +259,7 @@ class HTTPTransport:
                 self.endpoint,
                 batch_id=batch_id,
                 detail=f"{type(err).__name__}: {err}",
-                request_bytes=len(body),
+                request_bytes=raw_length,
             ) from err
 
         accepted = _parse_count(response_headers.get(ACCEPTED_HEADER_NAME.lower()))

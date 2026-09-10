@@ -10,12 +10,41 @@ from __future__ import annotations
 from typing import Final, Tuple
 
 DEFAULT_QUEUE_SIZE: Final = 64 * 1024
-DEFAULT_MAX_BATCH_SIZE: Final = 512
+
+# A batch closes on whichever of these it reaches first, and both are what the
+# ingest endpoint accepts rather than a guess. The event count matters for
+# unique and top metrics, whose repeats are dropped per batch: a bigger batch
+# collapses more of them and so sends less.
+DEFAULT_MAX_BATCH_SIZE: Final = 4096
+
+# Well under the 265 KiB the endpoint takes, because the series definitions and
+# the header ride along with the events and are not counted here.
+DEFAULT_MAX_BATCH_BYTES: Final = 160 * 1024
+
+# How many distinct series one batch may carry. The endpoint refuses a batch
+# defining more than this many, and a batch defines every series in it that the
+# dictionary has not seen -- which on a first flush is all of them. Bounding
+# events alone is not enough: 4096 events can be 4096 series.
+DEFAULT_MAX_BATCH_SERIES: Final = 1024
+
+# Three separate ceilings that are not that one, and must not be conflated with
+# it: how many counter series one batch aggregates into single events, how large
+# the dictionary grows before it is thrown away and every definition re-sent,
+# and how many distinct cumulative totals one process may track for the whole of
+# its life.
 DEFAULT_MAX_SERIES_PER_BATCH: Final = 2048
 DEFAULT_MAX_DICTIONARY_SERIES: Final = DEFAULT_MAX_SERIES_PER_BATCH
 DEFAULT_MAX_TOTAL_SERIES: Final = DEFAULT_MAX_SERIES_PER_BATCH
 
-DEFAULT_FLUSH_INTERVAL_MS: Final = 500
+# Nothing reads a metric faster than this: the finest chart bucket is ten
+# seconds and the dashboard refetches at most every few. Flushing oftener than
+# anything can be seen only costs requests, and costs the batching that makes
+# unique and top metrics affordable.
+DEFAULT_FLUSH_INTERVAL_MS: Final = 2_000
+
+# Below this a compressed body saves less than the request's own headers cost,
+# and spends the caller's processor to do it.
+COMPRESS_MIN_BYTES: Final = 1024
 DEFAULT_FLUSH_TIMEOUT_MS: Final = 5_000
 
 DEFAULT_RETRY_QUEUE_SIZE: Final = 4096
