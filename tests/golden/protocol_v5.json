@@ -1,0 +1,307 @@
+{
+  "generator": "prostometrics-node dist/dictionary.js",
+  "cases": [
+    {
+      "name": "single_counter_no_labels",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "requests",
+              "value": 1,
+              "labels": [],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|requests\nc|0|1|1700000000\n"
+      ]
+    },
+    {
+      "name": "counter_with_sorted_labels",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "requests",
+              "value": 7,
+              "labels": [
+                "method=GET",
+                "status=200"
+              ],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|requests|method=GET|status=200\nc|0|7|1700000000\n"
+      ]
+    },
+    {
+      "name": "all_event_kinds",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "c_metric",
+              "value": 3,
+              "labels": [],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [
+            {
+              "metric": "v_metric",
+              "value": 1.5,
+              "sparse": false,
+              "labels": [],
+              "timestamp": 1700000001
+            },
+            {
+              "metric": "s_metric",
+              "value": 2.5,
+              "sparse": true,
+              "labels": [],
+              "timestamp": 1700000002
+            },
+            {
+              "metric": "o_metric",
+              "value": 100,
+              "sparse": false,
+              "success": true,
+              "labels": [],
+              "timestamp": 1700000004
+            },
+            {
+              "metric": "o_metric",
+              "value": 0,
+              "sparse": false,
+              "success": true,
+              "labels": [],
+              "timestamp": 1700000005
+            }
+          ],
+          "uniques": [
+            {
+              "metric": "u_metric",
+              "uniqueID": "18446744073709551615",
+              "labels": [],
+              "timestamp": 1700000003
+            }
+          ]
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|c_metric\nS|1|v_metric\nS|2|s_metric\nS|3|o_metric\nS|4|u_metric\nc|0|3|1700000000\nv|1|1.5|1700000001\ns|2|2.5|1700000002\no|3|100|1700000004\no|3|0|1700000005\nu|4|18446744073709551615|1700000003\n"
+      ]
+    },
+    {
+      "name": "integral_and_fractional_samples",
+      "batches": [
+        {
+          "counters": [],
+          "values": [
+            {
+              "metric": "v",
+              "value": 2048,
+              "sparse": false,
+              "labels": [],
+              "timestamp": 1700000000
+            },
+            {
+              "metric": "v",
+              "value": 0.125,
+              "sparse": false,
+              "labels": [],
+              "timestamp": 1700000001
+            },
+            {
+              "metric": "v",
+              "value": 0,
+              "sparse": false,
+              "labels": [],
+              "timestamp": 1700000002
+            }
+          ],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|v\nv|0|2048|1700000000\nv|0|0.125|1700000001\nv|0|0|1700000002\n"
+      ]
+    },
+    {
+      "name": "counter_rounding_half_away_from_zero",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "a",
+              "value": 0.5,
+              "labels": [],
+              "timestamp": 1700000000
+            },
+            {
+              "metric": "b",
+              "value": 1.5,
+              "labels": [],
+              "timestamp": 1700000000
+            },
+            {
+              "metric": "c",
+              "value": 2.5,
+              "labels": [],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|a\nS|1|b\nS|2|c\nc|0|1|1700000000\nc|1|2|1700000000\nc|2|3|1700000000\n"
+      ]
+    },
+    {
+      "name": "second_batch_reuses_dictionary",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "requests",
+              "value": 1,
+              "labels": [
+                "m=GET"
+              ],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        },
+        {
+          "counters": [
+            {
+              "metric": "requests",
+              "value": 2,
+              "labels": [
+                "m=GET"
+              ],
+              "timestamp": 1700000001
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|requests|m=GET\nc|0|1|1700000000\n",
+        "H|5|s|<SESSION>|1\nc|0|2|1700000001\n"
+      ]
+    },
+    {
+      "name": "third_batch_adds_a_series_and_bumps_revision",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "a",
+              "value": 1,
+              "labels": [],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        },
+        {
+          "counters": [
+            {
+              "metric": "a",
+              "value": 1,
+              "labels": [],
+              "timestamp": 1700000001
+            }
+          ],
+          "values": [],
+          "uniques": []
+        },
+        {
+          "counters": [
+            {
+              "metric": "b",
+              "value": 1,
+              "labels": [],
+              "timestamp": 1700000002
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|a\nc|0|1|1700000000\n",
+        "H|5|s|<SESSION>|1\nc|0|1|1700000001\n",
+        "H|5|s|<SESSION>|2\nS|1|b\nc|1|1|1700000002\n"
+      ]
+    },
+    {
+      "name": "unicode_metric_and_label_values",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "заказы",
+              "value": 1,
+              "labels": [
+                "город=Москва"
+              ],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|заказы|город=Москва\nc|0|1|1700000000\n"
+      ]
+    },
+    {
+      "name": "eight_labels",
+      "batches": [
+        {
+          "counters": [
+            {
+              "metric": "wide",
+              "value": 1,
+              "labels": [
+                "l0=v0",
+                "l1=v1",
+                "l2=v2",
+                "l3=v3",
+                "l4=v4",
+                "l5=v5",
+                "l6=v6",
+                "l7=v7"
+              ],
+              "timestamp": 1700000000
+            }
+          ],
+          "values": [],
+          "uniques": []
+        }
+      ],
+      "bodies": [
+        "H|5|s|<SESSION>|1\nS|0|wide|l0=v0|l1=v1|l2=v2|l3=v3|l4=v4|l5=v5|l6=v6|l7=v7\nc|0|1|1700000000\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "prostometrics"
+dynamic = ["version"]
+description = "Lightweight, non-blocking Python client for emitting Prostometrics metrics."
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["prostometrics", "metrics", "observability", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/prostoteam/prostometrics-python"
+Repository = "https://github.com/prostoteam/prostometrics-python"
+Issues = "https://github.com/prostoteam/prostometrics-python/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4",
+    "mypy>=1.8",
+    "ruff>=0.6",
+    # Optional: enables the preforking application server integration test.
+    "gunicorn>=21.2; sys_platform != 'win32'",
+]
+
+[tool.hatch.version]
+path = "src/prostometrics/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/prostometrics"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/prostometrics", "tests", "README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error"]
+
+[tool.mypy]
+strict = true
+files = ["src/prostometrics"]
+warn_unreachable = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# The package supports Python 3.9, so typing constructs stay runtime-safe
+# (typing.List, typing.Optional) rather than PEP 585/604 syntax, which is
+# only legal in annotations on that version.
+ignore = ["B008", "UP006", "UP035", "UP045"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

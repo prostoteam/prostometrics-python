@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff mypy
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pip install -e .
+      - run: mypy
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          # The free-threaded build has no GIL, so the client's locking has to
+          # be correct rather than incidentally safe. Linux only: it is the
+          # build most likely to be deployed.
+          - os: ubuntu-latest
+            python-version: "3.14t"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e . pytest
+      - run: pytest -q
+
+  prefork:
+    # Exercises the real thing this client has to survive: a preforking
+    # application server. Not run on Windows, which does not fork.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . pytest gunicorn
+      - run: pytest -q tests/test_fork.py tests/test_prefork_server.py
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Metric calls must stay within the hot-path budget
+        run: python bench/bench_hotpath.py
